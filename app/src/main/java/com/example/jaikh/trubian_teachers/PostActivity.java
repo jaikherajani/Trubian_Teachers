@@ -51,7 +51,7 @@ public class PostActivity extends AppCompatActivity {
         mPostBranch=(EditText) findViewById(R.id.branchField);
         mPostDesc=(EditText) findViewById(R.id.DescField);
         mSubmitBtn=(Button) findViewById(R.id.SubmitBtn);
-        mProgress= new ProgressDialog(this);
+        mProgress= new ProgressDialog(this,R.style.AppTheme_Dark_Dialog);
 
         mSelectImage.setOnClickListener(new View.OnClickListener() {
             @Override

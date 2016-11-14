@@ -2,7 +2,11 @@ package com.example.jaikh.trubian_teachers;
 
 import android.app.ProgressDialog;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -27,6 +31,9 @@ import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.GoogleAuthProvider;
 
+import java.io.File;
+import java.util.Map;
+
 
 public class MainActivity extends AppCompatActivity {
 
@@ -38,8 +45,9 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseAuth.AuthStateListener mAuthListener;
     private ProgressDialog progressDialog;
     private String user_name;
-    //private Boolean status = true;
     private boolean status;
+    int i =0;
+    private static final int PERMS_REQUEST_CODE=123;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -49,6 +57,13 @@ public class MainActivity extends AppCompatActivity {
         mGoogleButton = (SignInButton) findViewById(R.id.sign_in_button);
         mGoogleButton.setSize(SignInButton.SIZE_WIDE);
         mGoogleButton.setColorScheme(SignInButton.COLOR_AUTO);
+
+        if(hasPermissions()){
+            makeFolder();
+        }
+        else{
+            requestPerms();
+        }
 
         mAuth = FirebaseAuth.getInstance();
 
@@ -64,9 +79,8 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         };
-
-        if(mAuth.getCurrentUser() != null)
-            startActivity(new Intent(MainActivity.this,MainPage.class));
+        //if(mAuth.getCurrentUser() != null)
+        //startActivity(new Intent(MainActivity.this,MainPage.class));
 
         // Configure Google Sign In
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
@@ -86,6 +100,7 @@ public class MainActivity extends AppCompatActivity {
         mGoogleButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                i=0;
                 signIn();
             }
         });
@@ -98,30 +113,77 @@ public class MainActivity extends AppCompatActivity {
         mAuth.addAuthStateListener(mAuthListener);
     }
 
-    private void isUserRegistered() {
-        //user_name="JAYESH";
-        System.out.println("User name received in the method is - "+user_name);
-        Firebase ref = new Firebase("https://trubian-6f4e4.firebaseio.com/teachers/"+user_name);
-        ref.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(DataSnapshot dataSnapshot) {
-                if (dataSnapshot.getValue() !=null)
-                {
-                    System.out.println("User Exists ! Sign-In");
-                    startActivity(new Intent(MainActivity.this,MainPage.class));
-                }
-                else
-                {
-                    System.out.println("User DOES NOT Exists ! Register");
-                    startActivity(new Intent(MainActivity.this,Register.class));
-                }
-            }
+    private boolean hasPermissions(){
 
-            @Override
-            public void onCancelled(FirebaseError firebaseError) {
-                Toast.makeText(MainActivity.this, "Sign-In failed due to "+firebaseError.getMessage(), Toast.LENGTH_SHORT).show();
+        int res =0;
+        String[] permissions =new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE};
+        for(String perms : permissions){
+            res = checkCallingOrSelfPermission(perms);
+            if(!(res== PackageManager.PERMISSION_GRANTED)){
+                return false;
             }
-        });
+        }
+        return true;
+    }
+
+    private void requestPerms(){
+        String[] permissions =new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE};
+        if(Build.VERSION.SDK_INT>=Build.VERSION_CODES.M){
+            requestPermissions(permissions,PERMS_REQUEST_CODE);
+        }
+
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        boolean allowed = true;
+
+        switch (requestCode){
+            case PERMS_REQUEST_CODE:
+
+                for (int res : grantResults){
+                    // if user granted all permissions.
+                    allowed = allowed && (res == PackageManager.PERMISSION_GRANTED);
+                }
+
+                break;
+            default:
+                // if user not granted permissions.
+                allowed = false;
+                break;
+        }
+
+        if (allowed){
+            //user granted all permissions we can perform our task.
+            makeFolder();
+        }
+        else {
+            // we will give warning to user that they haven't granted permissions.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                if (shouldShowRequestPermissionRationale(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)){
+                    Toast.makeText(this, "Storage Permissions denied.", Toast.LENGTH_SHORT).show();
+                }
+            }
+        }
+    }
+
+    private void makeFolder(){
+        File file =new File(Environment.getExternalStorageDirectory().getAbsolutePath(),"TrubianAppDownloads");
+        if(!file.exists()){
+            Boolean ff = file.mkdir();
+            if(ff){
+                Toast.makeText(MainActivity.this,"Thanks for allowing permissions",Toast.LENGTH_SHORT).show();
+
+            }
+            else{
+                Toast.makeText(MainActivity.this,"Permissions have been denied. ",Toast.LENGTH_LONG).show();
+
+            }}
+        else{
+            Toast.makeText(MainActivity.this,"Welcome Back",Toast.LENGTH_SHORT).show();
+
+        }
+
     }
 
     @Override
@@ -147,12 +209,50 @@ public class MainActivity extends AppCompatActivity {
                 // Google Sign In was successful, authenticate with Firebase
                 GoogleSignInAccount account = result.getSignInAccount();
                 user_name = account.getDisplayName();
+                isUserRegistered();
                 firebaseAuthWithGoogle(account);
             } else {
                 // Google Sign In failed, update UI appropriately
                 // ...
             }
         }
+    }
+
+    private void isUserRegistered() {
+        AsyncTask<Void,Void,Boolean> task = new AsyncTask<Void, Void, Boolean>() {
+            @Override
+            protected Boolean doInBackground(Void... params) {
+                Firebase studentsRef = new Firebase("https://trubian-6f4e4.firebaseio.com/teachers/"+user_name);
+                studentsRef.addValueEventListener(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(DataSnapshot dataSnapshot) {
+                        Map<String, String> values = (Map<String,String>) dataSnapshot.getValue();
+                        Log.d(TAG, "Value is: " + values);
+                        if(values==null)
+                        {
+                            status = true;
+                            System.out.println("Values " + values);
+                            System.out.println("Status " + status);
+                            Proceed();
+                        }
+                        else
+                        {
+                            status = false;
+                            System.out.println("Values " + values);
+                            System.out.println("Status " + status);
+                            Proceed();
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(FirebaseError firebaseError) {
+                        Toast.makeText(MainActivity.this, "Error : "+firebaseError, Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return true;
+            }
+        };
+        task.execute();
     }
 
     private void firebaseAuthWithGoogle(GoogleSignInAccount account) {
@@ -169,8 +269,8 @@ public class MainActivity extends AppCompatActivity {
                     @Override
                     public void onComplete(@NonNull Task<AuthResult> task) {
                         Log.d(TAG, "signInWithCredential:onComplete:" + task.isSuccessful());
-                        isUserRegistered();
-                        progressDialog.dismiss();
+                        Proceed();
+
                         // If sign in fails, display a message to the user. If sign in succeeds
                         // the auth state listener will be notified and logic to handle the
                         // signed in user can be handled in the listener.
@@ -185,5 +285,18 @@ public class MainActivity extends AppCompatActivity {
                 });
     }
 
-}
+    public void Proceed()
+    {
+        i=++i;
+        if(i==2) {
+            progressDialog.dismiss();
+            if (status) {
+                System.out.println("Status received is " + status);
+                startActivity(new Intent(MainActivity.this, Register.class));
+            } else {
+                startActivity(new Intent(MainActivity.this, MainPage.class));
+            }
+        }
+    }
 
+}
